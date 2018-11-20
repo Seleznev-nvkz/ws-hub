@@ -1,0 +1,14 @@
+address: ":8080"           # address of server
+clientKey: "session_key"   # name of key to associate new client
+serverUrl: "/ws"           # url for new connections
+
+redis:
+  address: ":6379"         # endpoint of Redis
+  timeout: 120             # in seconds; close connections after remaining idle for this duration
+  idleConn: 4              # maximum number of connections allocated by the pool
+  channelPrefix: "ws-hub:" # prefix for all channels names
+
+webSocket:
+  writeWait: 10            # in seconds; write deadline on the underlying network connection
+  pongWait: 60             # in seconds; read deadline on the underlying network connection
+  maxMessageSize: 128      # maximum size for a message read from the peer
