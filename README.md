@@ -22,6 +22,11 @@ conn.onmessage = function(event) {
 ```
 go run .
 ```
+### Or using Docker
+```
+docker build -t ws-hub:latest .
+docker run -p 8080:8080 -p 6379:6379 --name ws-hub ws-hub:latest
+```
 ## Examples
 ### Config
 Example of config file (example/config.yaml):
