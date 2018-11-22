@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -28,12 +29,17 @@ func trailingSlashesMiddleware(next http.Handler) http.Handler {
 
 func statusPage(w http.ResponseWriter, _ *http.Request) {
 	clientsCount := len(hub.clients)
-	groups := make([]string, 0, len(hub.groups))
-	for key := range hub.groups {
-		groups = append(groups, key)
+	fmt.Fprintln(w, clientsCount)
+}
+
+func clientsPage(w http.ResponseWriter, _ *http.Request) {
+	clients := make([]string, 0, len(hub.clients))
+	for key := range hub.clients {
+		clients = append(clients, key)
 	}
 
-	fmt.Fprintf(w, "Clients count %v\n\nGroups:\n\t%s", clientsCount, strings.Join(groups, "\n\t"))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(clients)
 }
 
 func main() {
@@ -43,6 +49,7 @@ func main() {
 	router := http.NewServeMux()
 	router.HandleFunc(config.ServerUrl, serveWS)
 	router.HandleFunc("/status", statusPage)
+	router.HandleFunc("/clients", clientsPage)
 
 	err := http.ListenAndServe(config.Address, trailingSlashesMiddleware(router))
 	if err != nil {
