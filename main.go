@@ -19,6 +19,13 @@ func init() {
 	redisHandler = newRedisHandler(config.Redis.Address)
 }
 
+func trailingSlashesMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func statusPage(w http.ResponseWriter, _ *http.Request) {
 	clientsCount := len(hub.clients)
 	groups := make([]string, 0, len(hub.groups))
@@ -33,10 +40,11 @@ func main() {
 	redisHandler.run()
 	go hub.run()
 
-	http.HandleFunc(config.ServerUrl, serveWS)
-	http.HandleFunc("/status", statusPage)
+	router := http.NewServeMux()
+	router.HandleFunc(config.ServerUrl, serveWS)
+	router.HandleFunc("/status", statusPage)
 
-	err := http.ListenAndServe(config.Address, nil)
+	err := http.ListenAndServe(config.Address, trailingSlashesMiddleware(router))
 	if err != nil {
 		log.Fatal(err)
 	}
