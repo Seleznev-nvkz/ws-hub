@@ -51,6 +51,8 @@ func (h *Hub) groupsFromRedis(newGroups *RedisData) {
 }
 
 func (h *Hub) run() {
+	log.Println("HUB started")
+
 	for {
 		select {
 		case newGroups := <-h.connectGroup:

@@ -48,6 +48,7 @@ func (r *RedisHandler) listenPublish() {
 	conn := redisHandler.Get()
 	defer conn.Close()
 
+	log.Println("Start Listener of new clients")
 	for {
 		select {
 		case channel := <-r.pub:
@@ -68,6 +69,7 @@ func (r *RedisHandler) listenNewGroups() {
 	conn := redisHandler.Get()
 	defer conn.Close()
 
+	log.Println("Start Listener of groups by clientKey")
 	psc := redis.PubSubConn{Conn: conn}
 	psc.PSubscribe(config.Redis.NewGroups + "*")
 
@@ -88,6 +90,7 @@ func (r *RedisHandler) listenDataForGroup() {
 	conn := redisHandler.Get()
 	defer conn.Close()
 
+	log.Println("Start Listener of data for groups")
 	psc := redis.PubSubConn{Conn: conn}
 	psc.PSubscribe(config.Redis.DataToGroup + "*")
 
