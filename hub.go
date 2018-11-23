@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"strings"
 )
@@ -14,7 +15,11 @@ type Hub struct {
 	sendGroup    chan *RedisData
 
 	connect    chan *Client
-	disconnect chan Instance
+	disconnect chan *Client
+}
+
+func (h *Hub) String() string {
+	return fmt.Sprintf("groups: %s\nclients: %s\nextra: %s", h.groups, h.clients, h.extraClients)
 }
 
 func newHub() *Hub {
@@ -23,7 +28,7 @@ func newHub() *Hub {
 		clients:      make(map[string]*Client),
 		extraClients: make(map[*Client][]*Group),
 		connect:      make(chan *Client),
-		disconnect:   make(chan Instance),
+		disconnect:   make(chan *Client),
 		connectGroup: make(chan *RedisData),
 		sendGroup:    make(chan *RedisData, 1000), // arbitrary
 	}
@@ -35,6 +40,11 @@ func (h *Hub) groupsFromRedis(newGroups *RedisData) {
 	if !ok {
 		log.Printf("Not found client for %s", newGroups.name)
 		return
+	}
+	if _, ok := h.extraClients[client]; ok {
+		// refresh existing client
+		log.Println("Refreshing", client)
+		client.deleteFromGroups()
 	}
 
 	groupNames := strings.Split(string(newGroups.data), ",")
@@ -58,20 +68,21 @@ func (h *Hub) run() {
 		case newGroups := <-h.connectGroup:
 			h.groupsFromRedis(newGroups)
 		case client := <-h.connect:
+			log.Println("Connected", client)
 			h.clients[client.sessionId] = client
 			redisHandler.pub <- &RedisData{
 				name: config.Redis.NewClient,
 				data: []byte(client.sessionId),
 			}
 		case dataToGroup := <-h.sendGroup:
-			group, ok := hub.groups[dataToGroup.name]
-			if ok {
+			if group, ok := hub.groups[dataToGroup.name]; ok {
 				group.send(dataToGroup.data)
 			} else {
-				log.Printf("Not found group %s", dataToGroup.name)
+				log.Println("Not found group", dataToGroup.name)
 			}
-		case instance := <-h.disconnect:
-			instance.delete()
+		case client := <-h.disconnect:
+			log.Println("Disconnected", client)
+			client.delete()
 		}
 	}
 }

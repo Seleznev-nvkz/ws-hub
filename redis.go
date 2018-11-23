@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gomodule/redigo/redis"
 	"log"
 	"strings"
@@ -10,6 +11,10 @@ import (
 type RedisData struct {
 	name string
 	data []byte
+}
+
+func (r *RedisData) String() string {
+	return fmt.Sprint(r.name, string(r.data))
 }
 
 type RedisHandler struct {

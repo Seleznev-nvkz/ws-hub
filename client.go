@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
@@ -15,11 +16,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type Instance interface{ delete() }
-
 type Group struct {
 	name    string
 	clients map[*Client]struct{}
+}
+
+func (g *Group) String() string {
+	return fmt.Sprint(g.name, fmt.Sprint(g.clients))
 }
 
 type Client struct {
@@ -28,17 +31,26 @@ type Client struct {
 	send      chan []byte
 }
 
-// delete client from hub and all groups
+func (c *Client) String() string {
+	return c.sessionId
+}
+
+// total delete with closing conn
 func (c *Client) delete() {
+	c.deleteFromGroups()
+	if _, ok := hub.clients[c.sessionId]; ok {
+		delete(hub.clients, c.sessionId)
+	}
 	c.conn.Close()
+}
+
+// delete client from all groups
+func (c *Client) deleteFromGroups() {
 	if groups, ok := hub.extraClients[c]; ok {
 		for _, group := range groups {
 			group.deleteClient(c)
 		}
 		delete(hub.extraClients, c)
-	}
-	if _, ok := hub.clients[c.sessionId]; ok {
-		delete(hub.clients, c.sessionId)
 	}
 }
 
@@ -60,7 +72,7 @@ func (g *Group) send(data []byte) {
 			client.send <- data
 		}
 	} else {
-		hub.disconnect <- g
+		g.delete()
 	}
 }
 
