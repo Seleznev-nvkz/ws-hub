@@ -38,8 +38,12 @@ func (c *Client) String() string {
 // total delete with closing conn
 func (c *Client) delete() {
 	c.deleteFromGroups()
-	if _, ok := hub.clients[c.sessionId]; ok {
-		delete(hub.clients, c.sessionId)
+	if v, ok := hub.clients[c.sessionId]; ok {
+		if v == c {
+			// check pointer - if user fast reconnected
+			delete(hub.clients, c.sessionId)
+			log.Println("Disconnected", c)
+		}
 	}
 	c.conn.Close()
 }
@@ -110,6 +114,12 @@ func (c *Client) readPump() {
 		hub.disconnect <- c
 	}()
 
+	c.conn.SetReadLimit(config.WebSocket.MaxMessageSize)
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(config.WebSocket.PongWait))
+		return nil
+	})
+
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
@@ -136,11 +146,6 @@ func serveWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn.SetReadLimit(config.WebSocket.MaxMessageSize)
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(config.WebSocket.PongWait))
-		return nil
-	})
 	client := &Client{sessionId: sessionId[0], conn: conn, send: make(chan []byte)}
 	hub.connect <- client
 

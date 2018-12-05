@@ -81,7 +81,6 @@ func (h *Hub) run() {
 				log.Println("Not found group", dataToGroup.name)
 			}
 		case client := <-h.disconnect:
-			log.Println("Disconnected", client)
 			client.delete()
 		}
 	}
