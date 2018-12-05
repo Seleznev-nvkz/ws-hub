@@ -47,9 +47,9 @@ func main() {
 	go hub.run()
 
 	router := http.NewServeMux()
-	router.HandleFunc(config.ServerUrl, serveWS)
 	router.HandleFunc("/status", statusPage)
 	router.HandleFunc("/clients", clientsPage)
+	router.HandleFunc(config.ServerUrl, serveWS)
 
 	err := http.ListenAndServe(config.Address, trailingSlashesMiddleware(router))
 	if err != nil {
