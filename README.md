@@ -23,9 +23,9 @@ conn.onmessage = function(event) {
 go run .
 ```
 ### Or using Docker
+Create or copy config file and run docker container:
 ```
-docker build -t ws-hub:latest .
-docker run -p 8080:8080 -p 6379:6379 --name ws-hub ws-hub:latest
+docker run -d -ti -v ${PWD}/config.yaml:/root/config.yaml -p 8080:8080 -p 6379:6379 --name ws-hub seleznev/ws-hub:latest
 ```
 ## Examples
 ### Config

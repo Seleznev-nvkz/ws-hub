@@ -16,7 +16,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -installsuffix cgo -o 
 FROM scratch as ws-hub
 WORKDIR /root/
 COPY --from=ws-hub-builder /app /app
-ADD config.yaml .
 
 EXPOSE 8080 6379
 ENTRYPOINT ["/app"]
