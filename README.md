@@ -40,6 +40,7 @@ redis:
   timeout: 120              # in seconds; close connections after remaining idle for this duration
   idleConn: 4               # maximum number of connections allocated by the pool
   channelPrefix: "ws-hub:"  # prefix for all channels names
+  db: 0                     # select db of redis to connect
 
 webSocket:
   writeWait: 10             # in seconds; write deadline on the underlying network connection
