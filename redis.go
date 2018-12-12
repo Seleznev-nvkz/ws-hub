@@ -28,7 +28,7 @@ func newRedisHandler(addr string) *RedisHandler {
 			MaxIdle:     config.Redis.IdleConn,
 			IdleTimeout: config.Redis.Timeout,
 			Dial: func() (redis.Conn, error) {
-				return redis.Dial("tcp", addr)
+				return redis.Dial("tcp", addr, redis.DialDatabase(config.Redis.Db))
 			},
 			TestOnBorrow: func(c redis.Conn, t time.Time) error {
 				if time.Since(t) < time.Minute {

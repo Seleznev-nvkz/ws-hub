@@ -17,6 +17,7 @@ type Config struct {
 		ChannelPrefix string
 		Timeout       time.Duration
 		IdleConn      int
+		Db            int
 
 		NewClient      string // to send new 'clientKey'
 		DataToGroup    string // to broadcast on group
