@@ -26,9 +26,14 @@ func trailingSlashesMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func statusPage(w http.ResponseWriter, _ *http.Request) {
+func statusPage(w http.ResponseWriter, r *http.Request) {
 	clientsCount := len(hub.clients)
 	fmt.Fprintln(w, clientsCount)
+
+	_, ok := r.URL.Query()["detail"]
+	if ok {
+		fmt.Fprintln(w, hub)
+	}
 }
 
 func main() {
