@@ -49,34 +49,24 @@ func (c *Client) delete() {
 }
 
 // delete client from all groups
+// lookup all groups of user in extraClients and remove from all places
 func (c *Client) deleteFromGroups() {
 	if groups, ok := hub.extraClients[c]; ok {
 		for _, group := range groups {
-			group.deleteClient(c)
+			if _, ok := group.clients[c]; ok {
+				delete(group.clients, c)
+			}
+			if len(group.clients) < 1 {
+				delete(hub.groups, group.name)
+			}
 		}
 		delete(hub.extraClients, c)
 	}
 }
 
-func (g *Group) delete() {
-	delete(hub.groups, g.name)
-}
-
-func (g *Group) deleteClient(c *Client) {
-	for client := range g.clients {
-		if c == client {
-			delete(g.clients, client)
-		}
-	}
-}
-
 func (g *Group) send(data []byte) {
-	if len(g.clients) > 0 {
-		for client := range g.clients {
-			client.send <- data
-		}
-	} else {
-		g.delete()
+	for client := range g.clients {
+		client.send <- data
 	}
 }
 
