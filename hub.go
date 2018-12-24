@@ -41,8 +41,15 @@ func (h *Hub) groupsFromRedis(newGroups *RedisData) {
 		log.Printf("Not found client for %s", newGroups.name)
 		return
 	}
+
+	// check empty response for client and disconnect
+	if len(newGroups.data) == 0 {
+		client.delete()
+		return
+	}
+
+	// refresh existing client
 	if _, ok := h.extraClients[client]; ok {
-		// refresh existing client
 		log.Println("Refreshing", client)
 		client.deleteFromGroups()
 	}
@@ -68,7 +75,6 @@ func (h *Hub) run() {
 		case newGroups := <-h.connectGroup:
 			h.groupsFromRedis(newGroups)
 		case client := <-h.connect:
-			log.Println("Connected", client)
 			h.clients[client.sessionId] = client
 			redisHandler.pub <- &RedisData{
 				name: config.Redis.NewClient,
