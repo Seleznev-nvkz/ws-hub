@@ -81,7 +81,7 @@ func (r *RedisHandler) listenNewGroups() {
 	for {
 		switch msg := psc.Receive().(type) {
 		case redis.Message:
-			clientKey := strings.TrimLeft(msg.Channel, config.Redis.NewGroups)
+			clientKey := strings.TrimPrefix(msg.Channel, config.Redis.NewGroups)
 			hub.connectGroup <- &RedisData{name: clientKey, data: msg.Data}
 		case error:
 			log.Printf("Error %s", msg)
