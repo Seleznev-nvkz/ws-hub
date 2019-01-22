@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,13 +27,27 @@ func trailingSlashesMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func statusPage(w http.ResponseWriter, r *http.Request) {
+func statusPage(w http.ResponseWriter, _ *http.Request) {
 	clientsCount := len(hub.clients)
 	fmt.Fprintln(w, clientsCount)
+}
 
-	_, ok := r.URL.Query()["detail"]
-	if ok {
-		fmt.Fprintln(w, hub)
+func detailsView(w http.ResponseWriter, _ *http.Request) {
+	res := map[string][]string{}
+
+	for client, groups := range hub.extraClients {
+		res[client.sessionId] = make([]string, 0, len(groups))
+		for _, group := range groups {
+			res[client.sessionId] = append(res[client.sessionId], group.name)
+		}
+	}
+
+	jsonData, err := json.Marshal(res)
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonData)
+	} else {
+		w.Write([]byte(err.Error()))
 	}
 }
 
@@ -42,6 +57,7 @@ func main() {
 
 	router := http.NewServeMux()
 	router.HandleFunc("/status", statusPage)
+	router.HandleFunc("/details", detailsView)
 	router.HandleFunc(config.ServerUrl, serveWS)
 
 	err := http.ListenAndServe(config.Address, trailingSlashesMiddleware(router))
