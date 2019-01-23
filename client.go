@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,42 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
+}
+
+type ClientsRelations struct {
+	m  map[*Client][]*Group
+	mx sync.RWMutex
+}
+
+func NewClientsRelations() *ClientsRelations {
+	return &ClientsRelations{
+		m: make(map[*Client][]*Group),
+	}
+}
+
+func (cr *ClientsRelations) Get(client *Client) ([]*Group, bool) {
+	cr.mx.RLock()
+	val, ok := cr.m[client]
+	cr.mx.RUnlock()
+	return val, ok
+}
+
+func (cr *ClientsRelations) Set(client *Client, groups []*Group) {
+	cr.mx.Lock()
+	cr.m[client] = groups
+	cr.mx.Unlock()
+}
+
+func (cr *ClientsRelations) Delete(c *Client) {
+	cr.mx.Lock()
+	delete(cr.m, c)
+	cr.mx.Unlock()
+}
+
+func (cr *ClientsRelations) Range() map[*Client][]*Group {
+	cr.mx.RLock()
+	defer cr.mx.RUnlock()
+	return cr.m
 }
 
 type Group struct {
@@ -49,9 +86,9 @@ func (c *Client) delete() {
 }
 
 // delete client from all groups
-// lookup all groups of user in extraClients and remove from all places
+// lookup all groups of user in clientsRelations and remove from all places
 func (c *Client) deleteFromGroups() {
-	if groups, ok := hub.extraClients[c]; ok {
+	if groups, ok := hub.clientsRelations.Get(c); ok {
 		for _, group := range groups {
 			if _, ok := group.clients[c]; ok {
 				delete(group.clients, c)
@@ -60,7 +97,7 @@ func (c *Client) deleteFromGroups() {
 				delete(hub.groups, group.name)
 			}
 		}
-		delete(hub.extraClients, c)
+		hub.clientsRelations.Delete(c)
 	}
 }
 

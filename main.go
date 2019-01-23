@@ -35,7 +35,7 @@ func statusPage(w http.ResponseWriter, _ *http.Request) {
 func detailsView(w http.ResponseWriter, _ *http.Request) {
 	res := map[string][]string{}
 
-	for client, groups := range hub.extraClients {
+	for client, groups := range hub.clientsRelations.Range() {
 		res[client.sessionId] = make([]string, 0, len(groups))
 		for _, group := range groups {
 			res[client.sessionId] = append(res[client.sessionId], group.name)

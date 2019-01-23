@@ -1,15 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"strings"
 )
 
 type Hub struct {
-	groups       map[string]*Group    // to send all clients in group by group name
-	clients      map[string]*Client   // collect all clients in hub by sessionId
-	extraClients map[*Client][]*Group // for faster delete from groups
+	groups           map[string]*Group  // to send all clients in group by group name
+	clients          map[string]*Client // collect all clients in hub by sessionId
+	clientsRelations *ClientsRelations  // for faster delete from groups
 
 	connectGroup chan *RedisData
 	sendGroup    chan *RedisData
@@ -18,19 +17,15 @@ type Hub struct {
 	disconnect chan *Client
 }
 
-func (h *Hub) String() string {
-	return fmt.Sprintf("groups: %s\nclients: %s\nextra: %s", h.groups, h.clients, h.extraClients)
-}
-
 func newHub() *Hub {
 	return &Hub{
-		groups:       make(map[string]*Group),
-		clients:      make(map[string]*Client),
-		extraClients: make(map[*Client][]*Group),
-		connect:      make(chan *Client),
-		disconnect:   make(chan *Client),
-		connectGroup: make(chan *RedisData),
-		sendGroup:    make(chan *RedisData, 1000), // arbitrary
+		clientsRelations: NewClientsRelations(),
+		groups:           make(map[string]*Group),
+		clients:          make(map[string]*Client),
+		connect:          make(chan *Client),
+		disconnect:       make(chan *Client),
+		connectGroup:     make(chan *RedisData),
+		sendGroup:        make(chan *RedisData, 1000), // arbitrary
 	}
 }
 
@@ -44,27 +39,29 @@ func (h *Hub) groupsFromRedis(newGroups *RedisData) {
 
 	// check empty response for client and disconnect
 	if len(newGroups.data) == 0 {
+		log.Printf("empty response for client - disconnect %s", newGroups.name)
 		client.delete()
 		return
 	}
 
 	// refresh existing client
-	if _, ok := h.extraClients[client]; ok {
+	if _, ok := h.clientsRelations.Get(client); ok {
 		log.Println("Refreshing", client)
 		client.deleteFromGroups()
 	}
 
 	groupNames := strings.Split(string(newGroups.data), ",")
-	h.extraClients[client] = make([]*Group, 0, len(groupNames))
+	allGroups := make([]*Group, 0, len(groupNames))
 	for _, groupName := range groupNames {
 		group, ok := h.groups[groupName]
 		if !ok {
 			group = &Group{name: groupName, clients: make(map[*Client]struct{})}
 			h.groups[groupName] = group
 		}
-		h.extraClients[client] = append(h.extraClients[client], group)
+		allGroups = append(allGroups, group)
 		group.clients[client] = struct{}{}
 	}
+	h.clientsRelations.Set(client, allGroups)
 }
 
 func (h *Hub) run() {
