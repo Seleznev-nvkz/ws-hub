@@ -9,12 +9,12 @@ import (
 )
 
 type RedisData struct {
-	name string
-	data []byte
+	channel string
+	data    []byte
 }
 
 func (r *RedisData) String() string {
-	return fmt.Sprint(r.name, string(r.data))
+	return fmt.Sprint(r.channel, string(r.data))
 }
 
 type RedisHandler struct {
@@ -48,7 +48,7 @@ func (r *RedisHandler) run() {
 	go r.listenDataForGroup()
 }
 
-// publish new data by channel name
+// publish new data from client by channel name
 func (r *RedisHandler) listenPublish() {
 	conn := redisHandler.Get()
 	defer conn.Close()
@@ -57,7 +57,7 @@ func (r *RedisHandler) listenPublish() {
 	for {
 		select {
 		case channel := <-r.pub:
-			err := conn.Send("PUBLISH", channel.name, channel.data)
+			err := conn.Send("PUBLISH", channel.channel, channel.data)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -82,9 +82,9 @@ func (r *RedisHandler) listenNewGroups() {
 		switch msg := psc.Receive().(type) {
 		case redis.Message:
 			clientKey := strings.TrimPrefix(msg.Channel, config.Redis.NewGroups)
-			hub.connectGroup <- &RedisData{name: clientKey, data: msg.Data}
+			hub.connectGroup <- &RedisData{channel: clientKey, data: msg.Data}
 		case error:
-			log.Printf("Error %s", msg)
+			log.Printf("REDIS Error %s", msg)
 			return
 		}
 	}
@@ -103,9 +103,9 @@ func (r *RedisHandler) listenDataForGroup() {
 		switch msg := psc.Receive().(type) {
 		case redis.Message:
 			channelName := strings.TrimPrefix(msg.Channel, config.Redis.DataToGroup)
-			hub.sendGroup <- &RedisData{name: channelName, data: msg.Data}
+			hub.sendGroup <- &RedisData{channel: channelName, data: msg.Data}
 		case error:
-			log.Printf("Error %s", msg)
+			log.Printf("REDIS Error %s", msg)
 			return
 		}
 	}

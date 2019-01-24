@@ -31,15 +31,15 @@ func newHub() *Hub {
 
 // create/update groups from redis' response; add client to group
 func (h *Hub) groupsFromRedis(newGroups *RedisData) {
-	client, ok := h.clients[newGroups.name]
+	client, ok := h.clients[newGroups.channel]
 	if !ok {
-		log.Printf("Not found client for %s", newGroups.name)
+		log.Printf("Not found client for %s", newGroups.channel)
 		return
 	}
 
 	// check empty response for client and disconnect
 	if len(newGroups.data) == 0 {
-		log.Printf("empty response for client - disconnect %s", newGroups.name)
+		log.Printf("empty response for client - disconnect %s", newGroups.channel)
 		client.delete()
 		return
 	}
@@ -74,14 +74,12 @@ func (h *Hub) run() {
 		case client := <-h.connect:
 			h.clients[client.sessionId] = client
 			redisHandler.pub <- &RedisData{
-				name: config.Redis.NewClient,
-				data: []byte(client.sessionId),
+				channel: config.Redis.NewClient,
+				data:    []byte(client.sessionId),
 			}
 		case dataToGroup := <-h.sendGroup:
-			if group, ok := hub.groups[dataToGroup.name]; ok {
+			if group, ok := hub.groups[dataToGroup.channel]; ok {
 				group.send(dataToGroup.data)
-			} else {
-				log.Println("Not found group", dataToGroup.name)
 			}
 		case client := <-h.disconnect:
 			client.delete()

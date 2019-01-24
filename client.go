@@ -77,7 +77,7 @@ func (c *Client) delete() {
 	c.deleteFromGroups()
 	if v, ok := hub.clients[c.sessionId]; ok {
 		if v == c {
-			// check pointer - if user fast reconnected
+			// check by pointer, not by session - if user fast reconnected
 			delete(hub.clients, c.sessionId)
 			log.Println("Disconnected", c)
 		}
@@ -154,8 +154,8 @@ func (c *Client) readPump() {
 			break
 		}
 		redisHandler.pub <- &RedisData{
-			name: config.Redis.DataFromClient + c.sessionId,
-			data: data,
+			channel: config.Redis.DataFromClient + c.sessionId,
+			data:    data,
 		}
 	}
 }
