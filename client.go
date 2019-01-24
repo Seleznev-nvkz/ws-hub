@@ -17,40 +17,68 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type ClientsRelations struct {
-	m  map[*Client][]*Group
+type ClientMap struct {
+	m  map[string]*Client
 	mx sync.RWMutex
 }
 
-func NewClientsRelations() *ClientsRelations {
-	return &ClientsRelations{
-		m: make(map[*Client][]*Group),
+func NewClientMap() *ClientMap {
+	return &ClientMap{
+		m: make(map[string]*Client),
 	}
 }
 
-func (cr *ClientsRelations) Get(client *Client) ([]*Group, bool) {
-	cr.mx.RLock()
-	val, ok := cr.m[client]
-	cr.mx.RUnlock()
+func (cm *ClientMap) Get(sessionId string) (*Client, bool) {
+	cm.mx.RLock()
+	val, ok := cm.m[sessionId]
+	cm.mx.RUnlock()
 	return val, ok
 }
 
-func (cr *ClientsRelations) Set(client *Client, groups []*Group) {
-	cr.mx.Lock()
-	cr.m[client] = groups
-	cr.mx.Unlock()
+func (cm *ClientMap) Add(client *Client) {
+	cm.mx.Lock()
+	cm.m[client.sessionId] = client
+	cm.mx.Unlock()
 }
 
-func (cr *ClientsRelations) Delete(c *Client) {
-	cr.mx.Lock()
-	delete(cr.m, c)
-	cr.mx.Unlock()
+func (cm *ClientMap) SetGroups(client *Client, groups map[*Group]struct{}) {
+	cm.mx.Lock()
+	client.groups = groups
+	cm.mx.Unlock()
 }
 
-func (cr *ClientsRelations) Range() map[*Client][]*Group {
-	cr.mx.RLock()
-	defer cr.mx.RUnlock()
-	return cr.m
+// remove client from all groups
+func (cm *ClientMap) Delete(c *Client) {
+	cm.mx.Lock()
+	defer cm.mx.Unlock()
+
+	if v, ok := cm.m[c.sessionId]; ok && v == c {
+		for group := range c.groups {
+			if _, ok := group.clients[c]; ok {
+				delete(group.clients, c)
+			}
+			// remove empty group
+			if len(group.clients) < 1 {
+				delete(hub.groups, group.name)
+			}
+		}
+		delete(cm.m, c.sessionId)
+		c.conn.Close()
+	}
+}
+
+func (cm *ClientMap) getDetails() map[string][]string {
+	res := map[string][]string{}
+	cm.mx.RLock()
+	defer cm.mx.RUnlock()
+
+	for session, client := range cm.m {
+		res[session] = make([]string, 0, len(client.groups))
+		for group := range client.groups {
+			res[session] = append(res[session], group.name)
+		}
+	}
+	return res
 }
 
 type Group struct {
@@ -62,49 +90,21 @@ func (g *Group) String() string {
 	return fmt.Sprint(g.name, fmt.Sprint(g.clients))
 }
 
+func (g *Group) send(data []byte) {
+	for client := range g.clients {
+		client.send <- data
+	}
+}
+
 type Client struct {
 	conn      *websocket.Conn
 	sessionId string
+	groups    map[*Group]struct{}
 	send      chan []byte
 }
 
 func (c *Client) String() string {
 	return c.sessionId
-}
-
-// total delete with closing conn
-func (c *Client) delete() {
-	c.deleteFromGroups()
-	if v, ok := hub.clients[c.sessionId]; ok {
-		if v == c {
-			// check by pointer, not by session - if user fast reconnected
-			delete(hub.clients, c.sessionId)
-			log.Println("Disconnected", c)
-		}
-	}
-	c.conn.Close()
-}
-
-// delete client from all groups
-// lookup all groups of user in clientsRelations and remove from all places
-func (c *Client) deleteFromGroups() {
-	if groups, ok := hub.clientsRelations.Get(c); ok {
-		for _, group := range groups {
-			if _, ok := group.clients[c]; ok {
-				delete(group.clients, c)
-			}
-			if len(group.clients) < 1 {
-				delete(hub.groups, group.name)
-			}
-		}
-		hub.clientsRelations.Delete(c)
-	}
-}
-
-func (g *Group) send(data []byte) {
-	for client := range g.clients {
-		client.send <- data
-	}
 }
 
 func (c *Client) writePump() {
@@ -173,7 +173,12 @@ func serveWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &Client{sessionId: sessionId[0], conn: conn, send: make(chan []byte)}
+	client := &Client{
+		sessionId: sessionId[0],
+		conn:      conn,
+		send:      make(chan []byte),
+		groups:    make(map[*Group]struct{}),
+	}
 	hub.connect <- client
 
 	go client.readPump()
