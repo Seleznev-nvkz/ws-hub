@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/spf13/viper"
 	"log"
+	"math/rand"
 	"time"
 )
 
@@ -11,6 +12,7 @@ type Config struct {
 	ClientKey  string // unique keys to identify user
 	ServerUrl  string
 	FromHeader bool // to get 'clientKey' from Header or Query
+	ID         string
 
 	Redis struct {
 		Address       string
@@ -32,6 +34,14 @@ type Config struct {
 	}
 }
 
+// Generate a random ID
+func generateID(length int) (res string) {
+	for i := 0; i < length; i++ {
+		res += string(rand.Intn(10))
+	}
+	return
+}
+
 func newConfig() *Config {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
@@ -47,6 +57,7 @@ func newConfig() *Config {
 		log.Fatal(err)
 	}
 
+	conf.ID = generateID(10)
 	conf.Redis.Timeout = conf.Redis.Timeout * time.Second
 	conf.WebSocket.PongWait = conf.WebSocket.PongWait * time.Second
 	conf.WebSocket.WriteWait = conf.WebSocket.WriteWait * time.Second
