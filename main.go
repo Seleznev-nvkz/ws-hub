@@ -28,21 +28,11 @@ func trailingSlashesMiddleware(next http.Handler) http.Handler {
 }
 
 func statusPage(w http.ResponseWriter, _ *http.Request) {
-	clientsCount := len(hub.clients)
-	fmt.Fprintln(w, clientsCount)
+	fmt.Fprintln(w, len(hub.connections.clients))
 }
 
 func detailsView(w http.ResponseWriter, _ *http.Request) {
-	res := map[string][]string{}
-
-	for client, groups := range hub.clientsRelations.Range() {
-		res[client.sessionId] = make([]string, 0, len(groups))
-		for _, group := range groups {
-			res[client.sessionId] = append(res[client.sessionId], group.name)
-		}
-	}
-
-	jsonData, err := json.Marshal(res)
+	jsonData, err := json.Marshal(hub.connections.getDetails())
 	if err == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsonData)
