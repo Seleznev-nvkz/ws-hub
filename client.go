@@ -1,11 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -17,83 +15,9 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type ClientMap struct {
-	m  map[string]*Client
-	mx sync.RWMutex
-}
-
-func NewClientMap() *ClientMap {
-	return &ClientMap{
-		m: make(map[string]*Client),
-	}
-}
-
-func (cm *ClientMap) Get(sessionId string) (*Client, bool) {
-	cm.mx.RLock()
-	val, ok := cm.m[sessionId]
-	cm.mx.RUnlock()
-	return val, ok
-}
-
-func (cm *ClientMap) Add(client *Client) {
-	cm.mx.Lock()
-	cm.m[client.sessionId] = client
-	cm.mx.Unlock()
-}
-
-func (cm *ClientMap) SetGroups(client *Client, groups map[*Group]struct{}) {
-	cm.mx.Lock()
-	client.groups = groups
-	cm.mx.Unlock()
-}
-
-// remove client from all groups
-func (cm *ClientMap) Delete(c *Client) {
-	cm.mx.Lock()
-	defer cm.mx.Unlock()
-
-	if v, ok := cm.m[c.sessionId]; ok && v == c {
-		for group := range c.groups {
-			if _, ok := group.clients[c]; ok {
-				delete(group.clients, c)
-			}
-			// remove empty group
-			if len(group.clients) < 1 {
-				delete(hub.groups, group.name)
-			}
-		}
-		delete(cm.m, c.sessionId)
-		c.conn.Close()
-	}
-}
-
-func (cm *ClientMap) getDetails() map[string][]string {
-	res := map[string][]string{}
-	cm.mx.RLock()
-	defer cm.mx.RUnlock()
-
-	for session, client := range cm.m {
-		res[session] = make([]string, 0, len(client.groups))
-		for group := range client.groups {
-			res[session] = append(res[session], group.name)
-		}
-	}
-	return res
-}
-
 type Group struct {
 	name    string
 	clients map[*Client]struct{}
-}
-
-func (g *Group) String() string {
-	return fmt.Sprint(g.name, fmt.Sprint(g.clients))
-}
-
-func (g *Group) send(data []byte) {
-	for client := range g.clients {
-		client.send <- data
-	}
 }
 
 type Client struct {
@@ -101,10 +25,6 @@ type Client struct {
 	sessionId string
 	groups    map[*Group]struct{}
 	send      chan []byte
-}
-
-func (c *Client) String() string {
-	return c.sessionId
 }
 
 func (c *Client) writePump() {
