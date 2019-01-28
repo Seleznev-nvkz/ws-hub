@@ -89,6 +89,8 @@ func (cm *ConnectionsMap) DeleteClient(c *Client) {
 	cm.Lock()
 	defer cm.Unlock()
 
+	// check pointers -
+	// if will fast reconnect - old goroutine send pointer with the same session before closed
 	if v, ok := cm.clients[c.sessionId]; ok && v == c {
 		for group := range c.groups {
 			if _, ok := group.clients[c]; ok {
