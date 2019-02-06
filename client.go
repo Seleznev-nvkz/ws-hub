@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
@@ -21,53 +20,11 @@ type Group struct {
 	clients map[*Client]struct{}
 }
 
-func (g *Group) String() string {
-	return fmt.Sprint(g.name, fmt.Sprint(g.clients))
-}
-
 type Client struct {
 	conn      *websocket.Conn
 	sessionId string
+	groups    map[*Group]struct{}
 	send      chan []byte
-}
-
-func (c *Client) String() string {
-	return c.sessionId
-}
-
-// total delete with closing conn
-func (c *Client) delete() {
-	c.deleteFromGroups()
-	if v, ok := hub.clients[c.sessionId]; ok {
-		if v == c {
-			// check pointer - if user fast reconnected
-			delete(hub.clients, c.sessionId)
-			log.Println("Disconnected", c)
-		}
-	}
-	c.conn.Close()
-}
-
-// delete client from all groups
-// lookup all groups of user in extraClients and remove from all places
-func (c *Client) deleteFromGroups() {
-	if groups, ok := hub.extraClients[c]; ok {
-		for _, group := range groups {
-			if _, ok := group.clients[c]; ok {
-				delete(group.clients, c)
-			}
-			if len(group.clients) < 1 {
-				delete(hub.groups, group.name)
-			}
-		}
-		delete(hub.extraClients, c)
-	}
-}
-
-func (g *Group) send(data []byte) {
-	for client := range g.clients {
-		client.send <- data
-	}
 }
 
 func (c *Client) writePump() {
@@ -117,8 +74,8 @@ func (c *Client) readPump() {
 			break
 		}
 		redisHandler.pub <- &RedisData{
-			name: config.Redis.DataFromClient + c.sessionId,
-			data: data,
+			channel: config.Redis.DataFromClient + c.sessionId,
+			data:    data,
 		}
 	}
 }
@@ -136,7 +93,12 @@ func serveWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &Client{sessionId: sessionId[0], conn: conn, send: make(chan []byte)}
+	client := &Client{
+		sessionId: sessionId[0],
+		conn:      conn,
+		send:      make(chan []byte),
+		groups:    make(map[*Group]struct{}),
+	}
 	hub.connect <- client
 
 	go client.readPump()

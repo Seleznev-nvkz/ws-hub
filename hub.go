@@ -1,15 +1,9 @@
 package main
 
-import (
-	"fmt"
-	"log"
-	"strings"
-)
+import "log"
 
 type Hub struct {
-	groups       map[string]*Group    // to send all clients in group by group name
-	clients      map[string]*Client   // collect all clients in hub by sessionId
-	extraClients map[*Client][]*Group // for faster delete from groups
+	connections *ConnectionsMap
 
 	connectGroup chan *RedisData
 	sendGroup    chan *RedisData
@@ -18,52 +12,13 @@ type Hub struct {
 	disconnect chan *Client
 }
 
-func (h *Hub) String() string {
-	return fmt.Sprintf("groups: %s\nclients: %s\nextra: %s", h.groups, h.clients, h.extraClients)
-}
-
 func newHub() *Hub {
 	return &Hub{
-		groups:       make(map[string]*Group),
-		clients:      make(map[string]*Client),
-		extraClients: make(map[*Client][]*Group),
+		connections:  NewConnectionsMap(),
 		connect:      make(chan *Client),
 		disconnect:   make(chan *Client),
 		connectGroup: make(chan *RedisData),
 		sendGroup:    make(chan *RedisData, 1000), // arbitrary
-	}
-}
-
-// create/update groups from redis' response; add client to group
-func (h *Hub) groupsFromRedis(newGroups *RedisData) {
-	client, ok := h.clients[newGroups.name]
-	if !ok {
-		log.Printf("Not found client for %s", newGroups.name)
-		return
-	}
-
-	// check empty response for client and disconnect
-	if len(newGroups.data) == 0 {
-		client.delete()
-		return
-	}
-
-	// refresh existing client
-	if _, ok := h.extraClients[client]; ok {
-		log.Println("Refreshing", client)
-		client.deleteFromGroups()
-	}
-
-	groupNames := strings.Split(string(newGroups.data), ",")
-	h.extraClients[client] = make([]*Group, 0, len(groupNames))
-	for _, groupName := range groupNames {
-		group, ok := h.groups[groupName]
-		if !ok {
-			group = &Group{name: groupName, clients: make(map[*Client]struct{})}
-			h.groups[groupName] = group
-		}
-		h.extraClients[client] = append(h.extraClients[client], group)
-		group.clients[client] = struct{}{}
 	}
 }
 
@@ -73,21 +28,16 @@ func (h *Hub) run() {
 	for {
 		select {
 		case newGroups := <-h.connectGroup:
-			h.groupsFromRedis(newGroups)
+			h.connections.SetGroupsFromRedis(newGroups)
+
 		case client := <-h.connect:
-			h.clients[client.sessionId] = client
-			redisHandler.pub <- &RedisData{
-				name: config.Redis.NewClient,
-				data: []byte(client.sessionId),
-			}
+			h.connections.AddClient(client)
+
 		case dataToGroup := <-h.sendGroup:
-			if group, ok := hub.groups[dataToGroup.name]; ok {
-				group.send(dataToGroup.data)
-			} else {
-				log.Println("Not found group", dataToGroup.name)
-			}
+			go h.connections.SendDataFromRedis(dataToGroup)
+
 		case client := <-h.disconnect:
-			client.delete()
+			h.connections.DeleteClient(client)
 		}
 	}
 }

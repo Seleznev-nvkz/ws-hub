@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,13 +28,17 @@ func trailingSlashesMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func statusPage(w http.ResponseWriter, r *http.Request) {
-	clientsCount := len(hub.clients)
-	fmt.Fprintln(w, clientsCount)
+func statusPage(w http.ResponseWriter, _ *http.Request) {
+	fmt.Fprintln(w, len(hub.connections.clients))
+}
 
-	_, ok := r.URL.Query()["detail"]
-	if ok {
-		fmt.Fprintln(w, hub)
+func detailsView(w http.ResponseWriter, _ *http.Request) {
+	jsonData, err := json.Marshal(hub.connections.getDetails())
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonData)
+	} else {
+		w.Write([]byte(err.Error()))
 	}
 }
 
@@ -50,6 +55,7 @@ func main() {
 	router.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	router.HandleFunc("/status", statusPage)
+	router.HandleFunc("/details", detailsView)
 	router.HandleFunc(config.ServerUrl, serveWS)
 
 	err := http.ListenAndServe(config.Address, trailingSlashesMiddleware(router))
