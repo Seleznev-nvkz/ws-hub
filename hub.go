@@ -34,7 +34,7 @@ func (h *Hub) run() {
 			h.connections.AddClient(client)
 
 		case dataToGroup := <-h.sendGroup:
-			go h.connections.SendDataFromRedis(dataToGroup)
+			h.connections.SendDataFromRedis(dataToGroup)
 
 		case client := <-h.disconnect:
 			h.connections.DeleteClient(client)
