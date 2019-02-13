@@ -39,8 +39,12 @@ func (cm *ConnectionsMap) AddClient(client *Client) {
 
 // get/create groups from list of names and add to client
 func (cm *ConnectionsMap) UpdateOrCreateGroups(names []string, c *Client) {
+	log.Printf("Handling groups for %s", c.sessionId)
 	cm.Lock()
-	defer cm.Unlock()
+	defer func() {
+		cm.Unlock()
+		log.Printf("Handled groups for %s", c.sessionId)
+	}()
 
 	for _, name := range names {
 		group, ok := cm.groups[name]
@@ -74,8 +78,12 @@ func (cm *ConnectionsMap) SetGroupsFromRedis(redisData *RedisData) {
 }
 
 func (cm *ConnectionsMap) SendDataFromRedis(redisData *RedisData) {
+	log.Printf("Sending data to %s", redisData.channel)
 	cm.RLock()
-	defer cm.RUnlock()
+	defer func() {
+		cm.RUnlock()
+		log.Printf("Sended data to %s", redisData.channel)
+	}()
 
 	if group, ok := cm.groups[redisData.channel]; ok {
 		for client := range group.clients {
@@ -86,8 +94,12 @@ func (cm *ConnectionsMap) SendDataFromRedis(redisData *RedisData) {
 
 // remove client from all groups
 func (cm *ConnectionsMap) DeleteClient(c *Client) {
+	log.Printf("Deleting %s", c.sessionId)
 	cm.Lock()
-	defer cm.Unlock()
+	defer func() {
+		cm.Unlock()
+		log.Printf("Deleted %s", c.sessionId)
+	}()
 
 	if v, ok := cm.clients[c.sessionId]; ok && v == c {
 		for group := range c.groups {
@@ -100,7 +112,6 @@ func (cm *ConnectionsMap) DeleteClient(c *Client) {
 			}
 		}
 		delete(cm.clients, c.sessionId)
-		c.conn.Close()
 	}
 }
 
