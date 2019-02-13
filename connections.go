@@ -112,7 +112,6 @@ func (cm *ConnectionsMap) DeleteClient(c *Client) {
 			}
 		}
 		delete(cm.clients, c.sessionId)
-		c.conn.Close()
 	}
 }
 

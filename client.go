@@ -30,8 +30,9 @@ type Client struct {
 func (c *Client) writePump() {
 	ticket := time.NewTicker(config.WebSocket.PingPeriod)
 	defer func() {
-		hub.disconnect <- c
 		ticket.Stop()
+		c.conn.Close()
+		hub.disconnect <- c
 	}()
 	for {
 		select {
@@ -41,14 +42,22 @@ func (c *Client) writePump() {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			err := c.conn.WriteMessage(websocket.TextMessage, message)
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				log.Printf("writePump NextWriter error: %v", err)
+				return
+			}
+			w.Write(message)
+			if err := w.Close(); err != nil {
+				log.Printf("writePump CloseWriter error: %v", err)
 				return
 			}
 
 		case <-ticket.C:
 			c.conn.SetWriteDeadline(time.Now().Add(config.WebSocket.WriteWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Printf("writePump PingMessage error: %v", err)
 				return
 			}
 		}
@@ -58,10 +67,12 @@ func (c *Client) writePump() {
 func (c *Client) readPump() {
 	defer func() {
 		// send to hub about user disc
+		c.conn.Close()
 		hub.disconnect <- c
 	}()
 
 	c.conn.SetReadLimit(config.WebSocket.MaxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(config.WebSocket.PongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(config.WebSocket.PongWait))
 		return nil
@@ -70,9 +81,10 @@ func (c *Client) readPump() {
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("error: %v", err)
-			break
+			log.Printf("readPump error: %v", err)
+			return
 		}
+
 		redisHandler.pub <- &RedisData{
 			channel: config.Redis.DataFromClient + c.sessionId,
 			data:    data,
@@ -96,7 +108,7 @@ func serveWS(w http.ResponseWriter, r *http.Request) {
 	client := &Client{
 		sessionId: sessionId[0],
 		conn:      conn,
-		send:      make(chan []byte),
+		send:      make(chan []byte, 256),
 		groups:    make(map[*Group]struct{}),
 	}
 	hub.connect <- client

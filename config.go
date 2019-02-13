@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 	"log"
 	"time"
 )
@@ -32,6 +33,12 @@ type Config struct {
 	}
 }
 
+func (c *Config) String() string {
+	vip := viper.AllSettings()
+	bs, _ := yaml.Marshal(vip)
+	return string(bs)
+}
+
 func newConfig() *Config {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
@@ -56,5 +63,7 @@ func newConfig() *Config {
 	conf.Redis.NewGroups = conf.Redis.ChannelPrefix + "groups-new:"
 	conf.Redis.DataFromClient = conf.Redis.ChannelPrefix + "client-data:"
 	conf.Redis.NewClient = conf.Redis.ChannelPrefix + "client-new"
+
+	log.Printf("Config \n %s", config)
 	return conf
 }
