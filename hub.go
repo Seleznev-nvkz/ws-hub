@@ -15,10 +15,10 @@ type Hub struct {
 func newHub() *Hub {
 	return &Hub{
 		connections:  NewConnectionsMap(),
-		connect:      make(chan *Client),
-		disconnect:   make(chan *Client),
-		connectGroup: make(chan *RedisData),
-		sendGroup:    make(chan *RedisData, 1000), // arbitrary
+		connect:      make(chan *Client, 100), // arbitrary
+		disconnect:   make(chan *Client, 100),
+		connectGroup: make(chan *RedisData, 100),
+		sendGroup:    make(chan *RedisData),
 	}
 }
 
@@ -34,7 +34,7 @@ func (h *Hub) run() {
 			h.connections.AddClient(client)
 
 		case dataToGroup := <-h.sendGroup:
-			h.connections.SendDataFromRedis(dataToGroup)
+			go h.connections.SendDataFromRedis(dataToGroup)
 
 		case client := <-h.disconnect:
 			h.connections.DeleteClient(client)
