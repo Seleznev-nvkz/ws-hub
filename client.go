@@ -31,7 +31,6 @@ func (c *Client) writePump() {
 	ticket := time.NewTicker(config.WebSocket.PingPeriod)
 	defer func() {
 		ticket.Stop()
-		c.conn.Close()
 		hub.disconnect <- c
 	}()
 	for {
@@ -53,7 +52,6 @@ func (c *Client) writePump() {
 				log.Printf("writePump CloseWriter error: %v", err)
 				return
 			}
-
 		case <-ticket.C:
 			c.conn.SetWriteDeadline(time.Now().Add(config.WebSocket.WriteWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
@@ -67,7 +65,6 @@ func (c *Client) writePump() {
 func (c *Client) readPump() {
 	defer func() {
 		// send to hub about user disc
-		c.conn.Close()
 		hub.disconnect <- c
 	}()
 
