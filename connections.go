@@ -23,10 +23,11 @@ func (cm *ConnectionsMap) GetClientBySession(sessionId string) (*Client, bool) {
 }
 
 func (cm *ConnectionsMap) AddClient(client *Client) {
-	oldClient, ok := cm.GetClientBySession(client.sessionId)
+	_, ok := cm.GetClientBySession(client.sessionId)
 	if ok {
-		log.Printf("Connect: already exists %s", oldClient.sessionId)
-		cm.DeleteClient(oldClient)
+		log.Printf("Connect: already exists %s", client.sessionId)
+		cm.DeleteClient(client)
+		return
 	}
 
 	cm.clients[client.sessionId] = client
