@@ -80,8 +80,13 @@ func main() {
 	router.HandleFunc("/sessions", sessionsView)
 	router.HandleFunc(config.ServerUrl, serveWS)
 
-	err := http.ListenAndServe(config.Address, trailingSlashesMiddleware(router))
-	if err != nil {
+	server := http.Server{
+		Addr:         config.Address,
+		Handler:      trailingSlashesMiddleware(router),
+		ReadTimeout:  config.WebSocket.PongWait,
+		WriteTimeout: config.WebSocket.WriteWait,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
