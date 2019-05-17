@@ -3,13 +3,11 @@ package main
 import (
 	"log"
 	"strings"
-	"sync"
 )
 
 type ConnectionsMap struct {
 	groups  map[string]*Group // to send all clients in group by group name
 	clients map[string]*Client
-	sync.RWMutex
 }
 
 func NewConnectionsMap() *ConnectionsMap {
@@ -20,16 +18,18 @@ func NewConnectionsMap() *ConnectionsMap {
 }
 
 func (cm *ConnectionsMap) GetClientBySession(sessionId string) (*Client, bool) {
-	cm.RLock()
 	val, ok := cm.clients[sessionId]
-	cm.RUnlock()
 	return val, ok
 }
 
 func (cm *ConnectionsMap) AddClient(client *Client) {
-	cm.Lock()
+	if oldClient, ok := cm.GetClientBySession(client.sessionId); ok {
+		log.Printf("Connect: already exists %s", client.sessionId)
+		oldClient.conn.Close()
+		return
+	}
+
 	cm.clients[client.sessionId] = client
-	cm.Unlock()
 
 	redisHandler.pub <- &RedisData{
 		channel: config.Redis.NewClient,
@@ -40,11 +40,7 @@ func (cm *ConnectionsMap) AddClient(client *Client) {
 // get/create groups from list of names and add to client
 func (cm *ConnectionsMap) UpdateOrCreateGroups(names []string, c *Client) {
 	log.Printf("Handling groups for %s", c.sessionId)
-	cm.Lock()
-	defer func() {
-		cm.Unlock()
-		log.Printf("Handled groups for %s", c.sessionId)
-	}()
+	defer log.Printf("Handled groups for %s", c.sessionId)
 
 	for _, name := range names {
 		group, ok := cm.groups[name]
@@ -79,11 +75,7 @@ func (cm *ConnectionsMap) SetGroupsFromRedis(redisData *RedisData) {
 
 func (cm *ConnectionsMap) SendDataFromRedis(redisData *RedisData) {
 	log.Printf("Sending data to %s", redisData.channel)
-	cm.RLock()
-	defer func() {
-		cm.RUnlock()
-		log.Printf("Sended data to %s", redisData.channel)
-	}()
+	defer log.Printf("Sended data to %s", redisData.channel)
 
 	if group, ok := cm.groups[redisData.channel]; ok {
 		for client := range group.clients {
@@ -95,11 +87,7 @@ func (cm *ConnectionsMap) SendDataFromRedis(redisData *RedisData) {
 // remove client from all groups
 func (cm *ConnectionsMap) DeleteClient(c *Client) {
 	log.Printf("Deleting %s", c.sessionId)
-	cm.Lock()
-	defer func() {
-		cm.Unlock()
-		log.Printf("Deleted %s", c.sessionId)
-	}()
+	defer log.Printf("Deleted %s", c.sessionId)
 
 	if v, ok := cm.clients[c.sessionId]; ok && v == c {
 		for group := range c.groups {
@@ -115,17 +103,36 @@ func (cm *ConnectionsMap) DeleteClient(c *Client) {
 	}
 }
 
+// -- methods for information --
 // return map with names of clients and groups
-func (cm *ConnectionsMap) getDetails() map[string][]string {
+func (cm *ConnectionsMap) getClientDetails() map[string][]string {
 	res := map[string][]string{}
-	cm.RLock()
-	defer cm.RUnlock()
 
 	for session, client := range cm.clients {
 		res[session] = make([]string, 0, len(client.groups))
 		for group := range client.groups {
 			res[session] = append(res[session], group.name)
 		}
+	}
+	return res
+}
+
+func (cm *ConnectionsMap) getGroupDetails() map[string][]string {
+	res := map[string][]string{}
+
+	for name, group := range cm.groups {
+		res[name] = make([]string, 0, len(group.clients))
+		for client := range group.clients {
+			res[name] = append(res[name], client.sessionId)
+		}
+	}
+	return res
+}
+
+func (cm *ConnectionsMap) getSessions() []string {
+	res := make([]string, 0, len(cm.clients))
+	for session := range cm.clients {
+		res = append(res, session)
 	}
 	return res
 }

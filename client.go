@@ -53,7 +53,6 @@ func (c *Client) writePump() {
 				log.Printf("writePump CloseWriter error: %v", err)
 				return
 			}
-
 		case <-ticket.C:
 			c.conn.SetWriteDeadline(time.Now().Add(config.WebSocket.WriteWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
